@@ -53,8 +53,13 @@ export function renderLogin(root: HTMLElement): void {
     submit.textContent = 'Validando…';
     const result = await verificarCedula(cedula);
     if (result.ok) {
-      setSession({ cedula: result.cedula, nombre: result.nombre, loggedInAt: new Date().toISOString() });
-      navigate(ROUTES.inicio);
+      setSession({
+        cedula: result.cedula,
+        nombre: result.nombre,
+        intentos: result.intentos,
+        loggedInAt: new Date().toISOString(),
+      });
+      navigate(result.bloqueado ? ROUTES.bloqueado : ROUTES.inicio);
       return;
     }
     error.textContent = result.message;

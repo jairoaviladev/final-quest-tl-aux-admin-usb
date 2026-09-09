@@ -1,5 +1,5 @@
 import { json, type NetlifyEvent, type NetlifyHandler, type NetlifyResponse } from './_types.ts';
-import { findEstudiante } from './_sheets.ts';
+import { findEstudiante, MAX_INTENTOS } from './_sheets.ts';
 
 interface RequestBody {
   cedula?: unknown;
@@ -37,7 +37,15 @@ export const handler: NetlifyHandler = async (event: NetlifyEvent): Promise<Netl
         message: 'La cédula no está registrada para esta evaluación.',
       });
     }
-    return json(200, { ok: true, nombre: estudiante.nombre, cedula: estudiante.cedula });
+    const intentos = Math.max(0, Math.min(MAX_INTENTOS, estudiante.intentos));
+    return json(200, {
+      ok: true,
+      nombre: estudiante.nombre,
+      cedula: estudiante.cedula,
+      intentos,
+      maxIntentos: MAX_INTENTOS,
+      bloqueado: intentos >= MAX_INTENTOS,
+    });
   } catch (error) {
     console.error('verificar-cedula:', error);
     return json(502, { ok: false, message: 'No se pudo validar la cédula. Intenta de nuevo.' });

@@ -12,7 +12,7 @@ import { postResult, type ResultPayload } from './api.ts';
 
 const KEY = 'evaluacion.pendingResult';
 
-export type QueueStatus = 'idle' | 'sending' | 'pending' | 'sent';
+export type QueueStatus = 'idle' | 'sending' | 'pending' | 'sent' | 'failed';
 
 interface Stored {
   payload: ResultPayload;
@@ -66,7 +66,7 @@ function nextDelayMs(attempts: number): number {
 async function tick(): Promise<void> {
   const stored = read();
   if (!stored) {
-    setStatus(status === 'sent' ? 'sent' : 'idle');
+    setStatus(status === 'sent' || status === 'failed' ? status : 'idle');
     return;
   }
   setStatus('sending');
@@ -74,6 +74,12 @@ async function tick(): Promise<void> {
   if (res.ok) {
     write(null);
     setStatus('sent');
+    return;
+  }
+  if (res.permanent) {
+    // 400/404/409: reintentar no ayuda. Se descarta el pendiente.
+    write(null);
+    setStatus('failed');
     return;
   }
   stored.attempts += 1;

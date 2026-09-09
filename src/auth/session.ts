@@ -3,6 +3,8 @@ import { APP_CONFIG } from '../config/app-config.ts';
 export interface StudentSession {
   cedula: string;
   nombre: string;
+  /** Intentos ya consumidos (0, 1 o 2) según la Google Sheet al ingresar. */
+  intentos: number;
   /** ISO en que se validó el ingreso. */
   loggedInAt: string;
 }
@@ -18,6 +20,7 @@ export function getSession(): StudentSession | null {
       return {
         cedula: parsed.cedula,
         nombre: parsed.nombre,
+        intentos: typeof parsed.intentos === 'number' ? parsed.intentos : 0,
         loggedInAt: parsed.loggedInAt ?? new Date().toISOString(),
       };
     }

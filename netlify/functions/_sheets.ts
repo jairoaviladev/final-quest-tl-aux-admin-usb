@@ -7,14 +7,23 @@
  * desarrollo y para las pruebas.
  */
 
+/** Máximo de intentos por estudiante. */
+export const MAX_INTENTOS = 2;
+
 export interface EstudianteRecord {
   cedula: string;
   nombre: string;
+  /** Intentos ya iniciados (0, 1 o 2). */
+  intentos: number;
 }
 
 export interface ResultadoRecord {
   cedula: string;
   nombre: string;
+  /** Número de intento (1 o 2). */
+  intento: number;
+  /** Id único del intento (generado por el cliente). Clave de idempotencia. */
+  intentoId: string;
   inicio: string;
   fin: string;
   duracionSeg: number;
@@ -22,6 +31,17 @@ export interface ResultadoRecord {
   total: number;
   porcentaje: number;
   respuestas: unknown;
+}
+
+export interface StartAttemptResult {
+  ok: boolean;
+  /** Número de intento asignado (1 o 2). */
+  intento?: number;
+  /** Total de intentos ya consumidos tras esta llamada. */
+  intentos: number;
+  /** true si el estudiante ya agotó los intentos. */
+  blocked?: boolean;
+  error?: string;
 }
 
 const WEBHOOK_URL = process.env['GOOGLE_SHEETS_WEBHOOK_URL']?.trim() ?? '';
@@ -36,6 +56,12 @@ function fallbackAllowlist(): string[] {
     .map((c) => c.trim())
     .filter(Boolean);
   return fromEnv.length > 0 ? fromEnv : DEMO_CEDULAS;
+}
+
+/** Contador de intentos en memoria para el modo desarrollo (sin hoja). */
+const devIntentos = new Map<string, Set<string>>();
+function devCount(cedula: string): number {
+  return devIntentos.get(cedula)?.size ?? 0;
 }
 
 export function isSheetsConfigured(): boolean {
@@ -106,13 +132,55 @@ async function callWebhook(
 export async function findEstudiante(cedula: string): Promise<EstudianteRecord | null> {
   const clean = cedula.trim();
   if (!isSheetsConfigured()) {
-    return fallbackAllowlist().includes(clean) ? { cedula: clean, nombre: 'Estudiante' } : null;
+    if (!fallbackAllowlist().includes(clean)) return null;
+    return { cedula: clean, nombre: 'Estudiante', intentos: devCount(clean) };
   }
   const result = await callWebhook('findEstudiante', { cedula: clean });
   if (!result.ok || !result.data) return null;
   const data = result.data as Partial<EstudianteRecord>;
   if (!data.cedula) return null;
-  return { cedula: data.cedula, nombre: data.nombre ?? 'Estudiante' };
+  return {
+    cedula: data.cedula,
+    nombre: data.nombre ?? 'Estudiante',
+    intentos: Number(data.intentos) || 0,
+  };
+}
+
+/** Registra el inicio de un intento. Idempotente por intentoId. */
+export async function startAttempt(cedula: string, intentoId: string): Promise<StartAttemptResult> {
+  const clean = cedula.trim();
+  const id = intentoId.trim();
+  if (!/^[\w-]{6,64}$/.test(id)) return { ok: false, intentos: 0, error: 'bad_request' };
+
+  if (!isSheetsConfigured()) {
+    if (!fallbackAllowlist().includes(clean)) return { ok: false, intentos: 0, error: 'not_registered' };
+    let set = devIntentos.get(clean);
+    if (!set) {
+      set = new Set();
+      devIntentos.set(clean, set);
+    }
+    if (set.has(id)) return { ok: true, intento: [...set].indexOf(id) + 1, intentos: set.size };
+    if (set.size >= MAX_INTENTOS) return { ok: false, intentos: set.size, blocked: true, error: 'max_attempts' };
+    set.add(id);
+    return { ok: true, intento: set.size, intentos: set.size };
+  }
+
+  const result = await callWebhook(
+    'startAttempt',
+    { cedula: clean, intentoId: id },
+    { perTryMs: 16_000, deadlineMs: 18_000 },
+  );
+  const intentos = Number((result as { intentos?: unknown }).intentos) || 0;
+  if (result.ok) {
+    const intento = Number((result as { intento?: unknown }).intento) || intentos;
+    return { ok: true, intento, intentos };
+  }
+  return {
+    ok: false,
+    intentos,
+    ...(result.error === 'max_attempts' ? { blocked: true } : {}),
+    ...(result.error ? { error: result.error } : {}),
+  };
 }
 
 /**
@@ -131,10 +199,18 @@ export async function warmup(): Promise<boolean> {
   }
 }
 
-/** Guarda el resultado del examen. */
+export class SaveResultadoError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Completa la fila del intento con el resultado. Idempotente por intentoId. */
 export async function saveResultado(record: ResultadoRecord): Promise<void> {
   if (!isSheetsConfigured()) {
-    // Modo desarrollo: sin hoja configurada, solo se registra en consola.
     console.info('[dev] Resultado (no persistido):', JSON.stringify(record));
     return;
   }
@@ -142,6 +218,9 @@ export async function saveResultado(record: ResultadoRecord): Promise<void> {
   // conviene fallar relativamente rápido y no dejar la función colgada.
   const result = await callWebhook('saveResultado', { record }, { perTryMs: 13_000, deadlineMs: 15_000 });
   if (!result.ok) {
-    throw new Error(result.error ?? 'No se pudo guardar el resultado');
+    throw new SaveResultadoError(
+      result.error ?? 'No se pudo guardar el resultado',
+      result.error ?? 'unknown',
+    );
   }
 }

@@ -29,6 +29,10 @@ export function renderResultado(root: HTMLElement): void {
     } else if (s === 'sending') {
       statusEl.textContent = 'Enviando resultado…';
       statusEl.className = 'mt-2 text-sm text-slate-500';
+    } else if (s === 'failed') {
+      statusEl.textContent =
+        'No se pudo registrar este envío. Si es tu último intento, avisa a tu docente.';
+      statusEl.className = 'mt-2 text-sm text-red-600';
     } else {
       statusEl.textContent =
         'Guardando tu resultado… puede tardar unos minutos. Puedes cerrar esta página, se enviará solo.';

@@ -1,6 +1,6 @@
 import { el, appHeader, pageShell, mount } from '../ui/dom.ts';
 import { APP_CONFIG } from '../config/app-config.ts';
-import { navigate, ROUTES } from '../urls/index.ts';
+import { MAX_INTENTOS, navigate, ROUTES } from '../urls/index.ts';
 import { getSession } from '../auth/session.ts';
 import { getQuestions } from '../questions/bank.ts';
 import type { Question, StudentAnswer } from '../questions/types.ts';
@@ -173,7 +173,12 @@ export function renderExamen(root: HTMLElement): void {
     appHeader(session.nombre),
     pageShell(
       el('div', { class: 'flex items-center justify-between' }, [
-        el('h1', { class: 'text-lg font-bold text-slate-900' }, ['Evaluación en curso']),
+        el('div', {}, [
+          el('h1', { class: 'text-lg font-bold text-slate-900' }, ['Evaluación en curso']),
+          el('p', { class: 'text-xs text-slate-400' }, [
+            `Intento ${state.intentoNumero} de ${MAX_INTENTOS}`,
+          ]),
+        ]),
         timerBox,
       ]),
       questionArea,

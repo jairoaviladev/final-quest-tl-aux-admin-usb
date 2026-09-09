@@ -3,6 +3,10 @@ import { getQuestions } from '../questions/bank.ts';
 import { isCorrect, type Question, type StudentAnswer } from '../questions/types.ts';
 
 export interface ExamState {
+  /** Id único del intento (generado al iniciar). Clave de idempotencia. */
+  intentoId: string;
+  /** Número de intento: 1 o 2. */
+  intentoNumero: number;
   startedAt: string;
   /** Momento límite (ISO). startedAt + duración. */
   endsAt: string;
@@ -16,9 +20,25 @@ export interface ExamState {
 
 const KEY = APP_CONFIG.storageKeys.examState;
 
-export function createExamState(now: Date = new Date()): ExamState {
+/** Genera un id de intento (UUID cuando está disponible). */
+export function newIntentoId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  } catch {
+    /* noop */
+  }
+  return `int-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function createExamState(
+  intentoId: string,
+  intentoNumero: number,
+  now: Date = new Date(),
+): ExamState {
   const endsAt = new Date(now.getTime() + APP_CONFIG.durationMinutes * 60_000);
   return {
+    intentoId,
+    intentoNumero,
     startedAt: now.toISOString(),
     endsAt: endsAt.toISOString(),
     currentIndex: 0,
@@ -32,8 +52,14 @@ export function loadExamState(): ExamState | null {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ExamState>;
-    if (typeof parsed.startedAt === 'string' && typeof parsed.endsAt === 'string') {
+    if (
+      typeof parsed.startedAt === 'string' &&
+      typeof parsed.endsAt === 'string' &&
+      typeof parsed.intentoId === 'string'
+    ) {
       return {
+        intentoId: parsed.intentoId,
+        intentoNumero: typeof parsed.intentoNumero === 'number' ? parsed.intentoNumero : 1,
         startedAt: parsed.startedAt,
         endsAt: parsed.endsAt,
         currentIndex: typeof parsed.currentIndex === 'number' ? parsed.currentIndex : 0,

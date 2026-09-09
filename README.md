@@ -82,9 +82,21 @@ GOOGLE_SHEETS_WEBHOOK_URL = https://script.google.com/macros/s/XXXX/exec
 GOOGLE_SHEETS_TOKEN       = (mismo valor que SHARED_TOKEN en el script)
 ```
 
-La hoja tiene dos pestañas: **Estudiantes** (`cedula`, `nombre`) y **Resultados**
-(`timestamp`, `cedula`, `nombre`, `inicio`, `fin`, `duracion_seg`, `puntaje`, `total`,
-`porcentaje`, `respuestas_json`).
+La hoja tiene dos pestañas:
+
+- **Estudiantes**: `cedula` · `nombre` · `intentos`
+  `intentos` (0/1/2) lo mantiene el script: número de intentos **iniciados**. Vacío = 0.
+  Para permitir un nuevo intento a un estudiante, poner su `intentos` en 0 o 1.
+- **Resultados**: `timestamp` · `cedula` · `nombre` · `intento` · `intentoId` · `inicio` · `fin` ·
+  `duracion_seg` · `puntaje` · `total` · `porcentaje` · `respuestas_json`
+  Una fila por intento. Se crea al iniciar (score en blanco) y se completa al finalizar.
+
+### Límite de intentos
+
+Máximo **2 intentos** por cédula (`MAX_INTENTOS` en `src/urls/index.ts` y `netlify/functions/_sheets.ts`).
+El intento se consume **al pulsar "Iniciar evaluación"** (`/api/start-attempt`), no al finalizar.
+Con `intentos = 2` el estudiante ve la vista `#/bloqueado` tras ingresar. El control es del
+lado del servidor (Apps Script bajo `LockService`), idempotente por `intentoId`.
 
 ## Despliegue en Netlify
 

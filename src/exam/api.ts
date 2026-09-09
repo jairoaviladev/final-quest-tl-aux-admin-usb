@@ -5,6 +5,8 @@ import type { StudentSession } from '../auth/session.ts';
 export interface ResultPayload {
   cedula: string;
   nombre: string;
+  intentoId: string;
+  intento: number;
   inicio: string;
   fin: string;
   duracionSeg: number;
@@ -25,6 +27,8 @@ export function buildResultPayload(
   return {
     cedula: session.cedula,
     nombre: session.nombre,
+    intentoId: state.intentoId,
+    intento: state.intentoNumero,
     inicio: state.startedAt,
     fin,
     duracionSeg,
@@ -34,10 +38,13 @@ export function buildResultPayload(
   };
 }
 
-/** Un único intento de envío. La política de reintentos vive en resultQueue. */
+/**
+ * Un único intento de envío. La política de reintentos vive en resultQueue.
+ * `permanent: true` indica que no tiene sentido reintentar (400/404/409).
+ */
 export async function postResult(
   payload: ResultPayload,
-): Promise<{ ok: boolean; message?: string }> {
+): Promise<{ ok: boolean; permanent?: boolean; message?: string }> {
   try {
     const res = await fetch(API_URLS.guardarResultado, {
       method: 'POST',
@@ -46,7 +53,8 @@ export async function postResult(
     });
     const data = (await res.json()) as { ok?: boolean; message?: string };
     if (res.ok && data.ok === true) return { ok: true };
-    return { ok: false, ...(data.message ? { message: data.message } : {}) };
+    const permanent = res.status === 400 || res.status === 404 || res.status === 409;
+    return { ok: false, permanent, ...(data.message ? { message: data.message } : {}) };
   } catch {
     return { ok: false, message: 'Sin conexión.' };
   }
