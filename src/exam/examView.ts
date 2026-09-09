@@ -160,10 +160,10 @@ export function renderExamen(root: HTMLElement): void {
     countdown.stop();
     if (!examState.finishedAt) {
       examState.finishedAt = new Date().toISOString();
+      // Marca el cierre por tiempo agotado: la cola de envío usa un jitter
+      // mayor para no saturar el backend cuando muchos expiran a la vez.
+      if (auto) examState.autoFinished = true;
       saveExamState(examState);
-    }
-    if (auto) {
-      // Aviso no bloqueante gestionado en la vista de resultado.
     }
     navigate(ROUTES.resultado);
   }

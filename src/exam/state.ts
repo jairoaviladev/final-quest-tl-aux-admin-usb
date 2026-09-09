@@ -10,6 +10,8 @@ export interface ExamState {
   /** id de pregunta -> respuesta del estudiante. */
   answers: Record<string, StudentAnswer>;
   finishedAt: string | null;
+  /** true si terminó por tiempo agotado (no por acción del estudiante). */
+  autoFinished?: boolean;
 }
 
 const KEY = APP_CONFIG.storageKeys.examState;
@@ -37,6 +39,7 @@ export function loadExamState(): ExamState | null {
         currentIndex: typeof parsed.currentIndex === 'number' ? parsed.currentIndex : 0,
         answers: parsed.answers ?? {},
         finishedAt: parsed.finishedAt ?? null,
+        ...(parsed.autoFinished ? { autoFinished: true } : {}),
       };
     }
   } catch {

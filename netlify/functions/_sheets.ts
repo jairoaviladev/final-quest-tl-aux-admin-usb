@@ -136,8 +136,9 @@ export async function saveResultado(record: ResultadoRecord): Promise<void> {
     console.info('[dev] Resultado (no persistido):', JSON.stringify(record));
     return;
   }
-  // El guardado tolera más espera (el cliente también reintenta).
-  const result = await callWebhook('saveResultado', { record }, { perTryMs: 20_000, deadlineMs: 25_000 });
+  // El cliente tiene cola durable (localStorage + reintentos), así que aquí
+  // conviene fallar relativamente rápido y no dejar la función colgada.
+  const result = await callWebhook('saveResultado', { record }, { perTryMs: 13_000, deadlineMs: 15_000 });
   if (!result.ok) {
     throw new Error(result.error ?? 'No se pudo guardar el resultado');
   }

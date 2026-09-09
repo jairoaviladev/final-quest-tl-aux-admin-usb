@@ -2,7 +2,8 @@ import { el, appHeader, pageShell, mount } from '../ui/dom.ts';
 import { navigate, ROUTES } from '../urls/index.ts';
 import { getSession, clearSession } from '../auth/session.ts';
 import { computeScore, loadExamState, clearExamState } from './state.ts';
-import { guardarResultado } from './api.ts';
+import { buildResultPayload } from './api.ts';
+import { enqueueResult, onQueueStatus, getQueueStatus } from './resultQueue.ts';
 
 export function renderResultado(root: HTMLElement): void {
   const session = getSession();
@@ -15,15 +16,29 @@ export function renderResultado(root: HTMLElement): void {
   const score = computeScore(state);
   const statusEl = el('p', { class: 'mt-2 text-sm text-slate-500' }, ['Enviando resultado…']);
 
-  void guardarResultado(session, state, score).then((res) => {
-    statusEl.textContent = res.ok
-      ? 'Resultado enviado correctamente.'
-      : `No se pudo enviar automáticamente: ${res.message ?? 'error desconocido'}.`;
-    statusEl.classList.toggle('text-red-600', !res.ok);
+  // Encola el resultado solo una vez (no en cada re-render de la vista).
+  if (getQueueStatus() === 'idle') {
+    // Si terminó por tiempo agotado, repartir el primer envío en ~45s.
+    const spreadMs = state.autoFinished ? 45_000 : 4_000;
+    enqueueResult(buildResultPayload(session, state, score), spreadMs);
+  }
+  const unsubscribe = onQueueStatus((s) => {
+    if (s === 'sent') {
+      statusEl.textContent = 'Resultado enviado correctamente.';
+      statusEl.className = 'mt-2 text-sm text-green-600';
+    } else if (s === 'sending') {
+      statusEl.textContent = 'Enviando resultado…';
+      statusEl.className = 'mt-2 text-sm text-slate-500';
+    } else {
+      statusEl.textContent =
+        'Guardando tu resultado… puede tardar unos minutos. Puedes cerrar esta página, se enviará solo.';
+      statusEl.className = 'mt-2 text-sm text-amber-600';
+    }
   });
 
   const finalizar = el('button', { class: 'btn-ghost mt-6' }, ['Cerrar sesión']);
   finalizar.addEventListener('click', () => {
+    unsubscribe();
     clearExamState();
     clearSession();
     navigate(ROUTES.login);
