@@ -48,16 +48,47 @@ interface WebhookResponse {
   error?: string;
 }
 
-async function callWebhook(action: string, payload: Record<string, unknown>): Promise<WebhookResponse> {
-  const res = await fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: TOKEN, action, ...payload }),
-  });
-  if (!res.ok) {
-    throw new Error(`Apps Script respondió ${res.status}`);
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Llama al Apps Script con timeout y reintentos con backoff.
+ * Protege ante ráfagas (p. ej. 50 envíos al agotarse el tiempo) en las que
+ * Apps Script puede responder 429/5xx o quedar en cola momentáneamente.
+ */
+async function callWebhook(
+  action: string,
+  payload: Record<string, unknown>,
+  { retries = 3, timeoutMs = 15_000 }: { retries?: number; timeoutMs?: number } = {},
+): Promise<WebhookResponse> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, action, ...payload }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.status === 429 || res.status >= 500) {
+        throw new Error(`Apps Script respondió ${res.status}`);
+      }
+      if (!res.ok) {
+        throw new Error(`Apps Script respondió ${res.status}`);
+      }
+      return (await res.json()) as WebhookResponse;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      if (attempt < retries) {
+        // Backoff exponencial con jitter: ~0.5s, ~1s, ~2s
+        await sleep(2 ** attempt * 500 + Math.random() * 300);
+      }
+    }
   }
-  return (await res.json()) as WebhookResponse;
+  throw lastError instanceof Error ? lastError : new Error('Apps Script no respondió');
 }
 
 /** Busca un estudiante por cédula. Devuelve null si no está registrado. */
