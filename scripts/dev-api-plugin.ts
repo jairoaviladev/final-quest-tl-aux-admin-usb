@@ -8,6 +8,7 @@ const FUNCTION_ROUTES: Record<string, () => Promise<{ handler: Handler }>> = {
   '/health': () => import('../netlify/functions/health.ts'),
   '/api/verificar-cedula': () => import('../netlify/functions/verificar-cedula.ts'),
   '/api/guardar-resultado': () => import('../netlify/functions/guardar-resultado.ts'),
+  '/api/warmup': () => import('../netlify/functions/warmup.ts'),
 };
 
 interface ReqLike {

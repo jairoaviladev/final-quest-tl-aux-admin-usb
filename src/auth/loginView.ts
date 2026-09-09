@@ -1,8 +1,13 @@
 import { el, appHeader, pageShell, mount } from '../ui/dom.ts';
 import { APP_CONFIG } from '../config/app-config.ts';
-import { navigate, ROUTES } from '../urls/index.ts';
+import { API_URLS, navigate, ROUTES } from '../urls/index.ts';
 import { verificarCedula } from './api.ts';
 import { setSession } from './session.ts';
+
+/** Calienta el backend/Apps Script en segundo plano (sin bloquear ni fallar). */
+function warmBackend(): void {
+  void fetch(API_URLS.warmup, { method: 'POST' }).catch(() => {});
+}
 
 export function renderLogin(root: HTMLElement): void {
   const input = el('input', {
@@ -73,4 +78,5 @@ export function renderLogin(root: HTMLElement): void {
   );
 
   input.focus();
+  warmBackend();
 }

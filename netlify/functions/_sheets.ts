@@ -66,7 +66,10 @@ interface CallOptions {
 async function callWebhook(
   action: string,
   payload: Record<string, unknown>,
-  { perTryMs = 7_000, deadlineMs = 9_000 }: CallOptions = {},
+  // Apps Script tiene un arranque en frío de ~15-20s (devuelve error mientras
+  // calienta) y luego responde en ~2s. El presupuesto debe absorber ese
+  // arranque; una vez caliente, la mayoría de llamadas terminan en 2-4s.
+  { perTryMs = 18_000, deadlineMs = 24_000 }: CallOptions = {},
 ): Promise<WebhookResponse> {
   const start = Date.now();
   let attempt = 0;
@@ -112,6 +115,20 @@ export async function findEstudiante(cedula: string): Promise<EstudianteRecord |
   return { cedula: data.cedula, nombre: data.nombre ?? 'Estudiante' };
 }
 
+/**
+ * "Calienta" el Apps Script (arranque en frío ~15-20s) para que las llamadas
+ * reales posteriores respondan rápido. No lanza si falla.
+ */
+export async function warmup(): Promise<boolean> {
+  if (!isSheetsConfigured()) return false;
+  try {
+    await callWebhook('warm', {}, { perTryMs: 22_000, deadlineMs: 23_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Guarda el resultado del examen. */
 export async function saveResultado(record: ResultadoRecord): Promise<void> {
   if (!isSheetsConfigured()) {
@@ -119,8 +136,8 @@ export async function saveResultado(record: ResultadoRecord): Promise<void> {
     console.info('[dev] Resultado (no persistido):', JSON.stringify(record));
     return;
   }
-  // El guardado tolera más espera (el cliente también reintenta y guarda copia local).
-  const result = await callWebhook('saveResultado', { record }, { perTryMs: 9_000, deadlineMs: 22_000 });
+  // El guardado tolera más espera (el cliente también reintenta).
+  const result = await callWebhook('saveResultado', { record }, { perTryMs: 20_000, deadlineMs: 25_000 });
   if (!result.ok) {
     throw new Error(result.error ?? 'No se pudo guardar el resultado');
   }

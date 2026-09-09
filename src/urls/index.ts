@@ -12,6 +12,8 @@ export const API_URLS = {
   verificarCedula: `${API_BASE}/verificar-cedula`,
   /** Guarda el resultado del examen en la Google Sheet. */
   guardarResultado: `${API_BASE}/guardar-resultado`,
+  /** "Calienta" el Apps Script (llamada en segundo plano). */
+  warmup: `${API_BASE}/warmup`,
 } as const;
 
 /** Rutas internas (hash router). */
