@@ -1,0 +1,28 @@
+# Configuracion de despliegue en Netlify
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Endpoint de salud: /health -> funcion serverless
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+  force = true
+
+# API interna
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# SPA fallback: cualquier otra ruta sirve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

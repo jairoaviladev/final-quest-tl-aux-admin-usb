@@ -1,0 +1,23 @@
+{
+  "name": "evaluacion-final",
+  "version": "1.0.0",
+  "description": "Evaluacion interactiva para estudiantes con ingreso por cedula y limite de 60 minutos. Stack: HTML + Vite + TypeScript + Tailwind. Deploy: Netlify.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && tsc -p tsconfig.node.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}
