@@ -1,5 +1,5 @@
 import { json, type NetlifyEvent, type NetlifyHandler, type NetlifyResponse } from './_types.ts';
-import { findEstudiante, isSheetsConfigured } from './_sheets.ts';
+import { findEstudiante } from './_sheets.ts';
 
 interface RequestBody {
   cedula?: unknown;
@@ -40,12 +40,7 @@ export const handler: NetlifyHandler = async (event: NetlifyEvent): Promise<Netl
     return json(200, { ok: true, nombre: estudiante.nombre, cedula: estudiante.cedula });
   } catch (error) {
     console.error('verificar-cedula:', error);
-    return json(502, {
-      ok: false,
-      message: 'No se pudo validar la cédula. Intenta de nuevo.',
-      // TEMPORAL: diagnóstico. Quitar tras resolver la conexión.
-      _debug: { configured: isSheetsConfigured(), error: String(error) },
-    });
+    return json(502, { ok: false, message: 'No se pudo validar la cédula. Intenta de nuevo.' });
   }
 };
 
