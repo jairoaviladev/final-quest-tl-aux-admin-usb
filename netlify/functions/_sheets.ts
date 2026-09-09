@@ -66,10 +66,10 @@ interface CallOptions {
 async function callWebhook(
   action: string,
   payload: Record<string, unknown>,
-  // Apps Script tiene un arranque en frío de ~15-20s (devuelve error mientras
-  // calienta) y luego responde en ~2s. El presupuesto debe absorber ese
-  // arranque; una vez caliente, la mayoría de llamadas terminan en 2-4s.
-  { perTryMs = 18_000, deadlineMs = 24_000 }: CallOptions = {},
+  // Nota: las funciones de Netlify se cortan a ~30s. Mantener el presupuesto
+  // bien por debajo. Apps Script arranca en frío en ~15-20s; para eso está
+  // /api/warmup, que se dispara al cargar la página.
+  { perTryMs = 16_000, deadlineMs = 18_000 }: CallOptions = {},
 ): Promise<WebhookResponse> {
   const start = Date.now();
   let attempt = 0;
@@ -122,7 +122,9 @@ export async function findEstudiante(cedula: string): Promise<EstudianteRecord |
 export async function warmup(): Promise<boolean> {
   if (!isSheetsConfigured()) return false;
   try {
-    await callWebhook('warm', {}, { perTryMs: 22_000, deadlineMs: 23_000 });
+    // Solo hace falta "tocar" el Apps Script para que empiece a arrancar;
+    // no esperamos a que termine (un intento corto basta).
+    await callWebhook('warm', {}, { perTryMs: 8_000, deadlineMs: 9_000 });
     return true;
   } catch {
     return false;
