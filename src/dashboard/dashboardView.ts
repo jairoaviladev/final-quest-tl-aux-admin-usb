@@ -3,7 +3,7 @@ import { APP_CONFIG } from '../config/app-config.ts';
 import { navigate, ROUTES } from '../urls/index.ts';
 import { getSession, clearSession } from '../auth/session.ts';
 import { getQuestions } from '../questions/bank.ts';
-import { createExamState, loadExamState, saveExamState } from '../exam/state.ts';
+import { createExamState, isExpired, loadExamState, saveExamState } from '../exam/state.ts';
 
 /** Página de inicio del examen: instrucciones y advertencia de los 60 minutos. */
 export function renderInicio(root: HTMLElement): void {
@@ -20,9 +20,11 @@ export function renderInicio(root: HTMLElement): void {
   ]) as HTMLButtonElement;
 
   empezar.addEventListener('click', () => {
-    // Si ya había un examen en curso, se retoma; si no, se crea.
+    // Retoma solo si hay un examen realmente en curso (no terminado ni vencido);
+    // en cualquier otro caso arranca uno nuevo.
     const existing = loadExamState();
-    if (!existing) {
+    const enCurso = existing && !existing.finishedAt && !isExpired(existing);
+    if (!enCurso) {
       saveExamState(createExamState());
     }
     navigate(ROUTES.examen);

@@ -25,8 +25,14 @@ export function renderExamen(root: HTMLElement): void {
     return;
   }
   const state: ExamState = loaded;
+  // Examen ya terminado o con el tiempo agotado: cerrar y mostrar resultado.
+  // (No se puede usar finish() aquí porque depende del countdown, aún no creado.)
   if (state.finishedAt || isExpired(state)) {
-    finish(state, true);
+    if (!state.finishedAt) {
+      state.finishedAt = new Date().toISOString();
+      saveExamState(state);
+    }
+    navigate(ROUTES.resultado);
     return;
   }
 
