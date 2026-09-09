@@ -50,20 +50,31 @@ interface WebhookResponse {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+interface CallOptions {
+  /** Timeout de cada intento. */
+  perTryMs?: number;
+  /** Presupuesto total: no se inician más intentos pasado este tiempo. */
+  deadlineMs?: number;
+}
+
 /**
- * Llama al Apps Script con timeout y reintentos con backoff.
- * Protege ante ráfagas (p. ej. 50 envíos al agotarse el tiempo) en las que
- * Apps Script puede responder 429/5xx o quedar en cola momentáneamente.
+ * Llama al Apps Script con timeout por intento + presupuesto total, y
+ * reintentos con backoff. El presupuesto total evita que un pico de latencia
+ * de Google (visto de 15-30s) deje al estudiante esperando: se corta antes
+ * y el cliente reintenta.
  */
 async function callWebhook(
   action: string,
   payload: Record<string, unknown>,
-  { retries = 3, timeoutMs = 15_000 }: { retries?: number; timeoutMs?: number } = {},
+  { perTryMs = 7_000, deadlineMs = 9_000 }: CallOptions = {},
 ): Promise<WebhookResponse> {
+  const start = Date.now();
+  let attempt = 0;
   let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+
+  while (Date.now() - start < deadlineMs) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), perTryMs);
     try {
       const res = await fetch(WEBHOOK_URL, {
         method: 'POST',
@@ -72,23 +83,20 @@ async function callWebhook(
         signal: controller.signal,
       });
       clearTimeout(timer);
-      if (res.status === 429 || res.status >= 500) {
-        throw new Error(`Apps Script respondió ${res.status}`);
-      }
-      if (!res.ok) {
+      if (!res.ok || res.status === 429) {
         throw new Error(`Apps Script respondió ${res.status}`);
       }
       return (await res.json()) as WebhookResponse;
     } catch (error) {
       clearTimeout(timer);
       lastError = error;
-      if (attempt < retries) {
-        // Backoff exponencial con jitter: ~0.5s, ~1s, ~2s
-        await sleep(2 ** attempt * 500 + Math.random() * 300);
-      }
+      const backoff = 2 ** attempt * 400 + Math.random() * 200;
+      attempt += 1;
+      if (Date.now() - start + backoff >= deadlineMs) break;
+      await sleep(backoff);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error('Apps Script no respondió');
+  throw lastError instanceof Error ? lastError : new Error('Apps Script no respondió a tiempo');
 }
 
 /** Busca un estudiante por cédula. Devuelve null si no está registrado. */
@@ -111,7 +119,8 @@ export async function saveResultado(record: ResultadoRecord): Promise<void> {
     console.info('[dev] Resultado (no persistido):', JSON.stringify(record));
     return;
   }
-  const result = await callWebhook('saveResultado', { record });
+  // El guardado tolera más espera (el cliente también reintenta y guarda copia local).
+  const result = await callWebhook('saveResultado', { record }, { perTryMs: 9_000, deadlineMs: 22_000 });
   if (!result.ok) {
     throw new Error(result.error ?? 'No se pudo guardar el resultado');
   }
